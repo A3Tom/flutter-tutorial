@@ -15,17 +15,8 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = ArticleViewModel(ArticleModel());
-
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Wikipedia Flutter'),
-        ),
-        body: const Center(
-          child: Text('Article summary output to console.'),
-        ),
-      ),
+      home: ArticleView(),
     );
   }
 }
@@ -34,9 +25,9 @@ class ArticleModel {
   Future<Summary> getRandomArticleSummary() async {
     final uri = Uri.https(
       'en.wikipedia.org',
-      '/api/rest_v1/page/random/summary'
+      '/api/rest_v1/page/random/summary',
     );
-    
+
     final response = await get(uri);
 
     if (response.statusCode != 200) {
@@ -73,5 +64,93 @@ class ArticleViewModel extends ChangeNotifier {
 
     loading = false;
     notifyListeners();
+  }
+}
+
+class ArticleView extends StatelessWidget {
+  ArticleView({super.key});
+
+  final viewModel = ArticleViewModel(ArticleModel());
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Wikipedia Flutter')),
+      body: ListenableBuilder(
+        listenable: viewModel,
+        builder: (context, child) {
+          return switch ((
+            viewModel.loading,
+            viewModel.summary,
+            viewModel.errorMessage,
+          )) {
+            (true, _, _) => CircularProgressIndicator(),
+            (false, _, String message) => Center(child: Text(message)),
+            (false, null, null) => Center(child: Text('Fuck knows mate')),
+            (false, Summary summary, null) => ArticlePage(
+              summary: summary,
+              nextArticleCallback: viewModel.getRandomArticleSummary,
+            ),
+          };
+        },
+      ),
+    );
+  }
+}
+
+class ArticlePage extends StatelessWidget {
+  const ArticlePage({
+    super.key,
+    required this.summary,
+    required this.nextArticleCallback,
+  });
+
+  final Summary summary;
+  final VoidCallback nextArticleCallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          ArticleWidget(summary: summary),
+          ElevatedButton(
+            onPressed: nextArticleCallback,
+            child: Text('Next random article'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ArticleWidget extends StatelessWidget {
+  const ArticleWidget({super.key, required this.summary});
+
+  final Summary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        spacing: 10.0,
+        children: [
+          if (summary.hasImage) Image.network(summary.originalImage!.source),
+          Text(
+            summary.titles.normalized,
+            overflow: TextOverflow.ellipsis,
+            style: TextTheme.of(context).displaySmall,
+          ),
+          if (summary.description != null)
+            Text(
+              summary.description!,
+              overflow: TextOverflow.ellipsis,
+              style: TextTheme.of(context).bodySmall,
+            ),
+          Text(summary.extract),
+        ],
+      ),
+    );
   }
 }
